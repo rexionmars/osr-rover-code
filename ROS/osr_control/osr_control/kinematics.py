@@ -104,11 +104,10 @@ class RoverKinematics:
             return radius
 
         if radius == 0:
-            if intuitive_mode:
-                if angular_z == 0:
-                    return self.max_radius
-                return self.min_radius * self.max_vel / angular_z
-            return self.max_radius
+            if not intuitive_mode or angular_z == 0:
+                return self.max_radius
+            # Proxy radius while standing still; still clip to rover limits below.
+            radius = self.min_radius * self.max_vel / angular_z
 
         if radius > 0:
             return max(self.min_radius, min(self.max_radius, radius))
@@ -116,7 +115,7 @@ class RoverKinematics:
 
     def calculate_corner_positions(self, radius: float) -> CornerCommand:
         """Corner angles [rad] for a turning radius. Positive radius = turn left."""
-        if radius >= self.max_radius:
+        if abs(radius) >= self.max_radius:
             return CornerCommand()
 
         theta_front_closest = math.atan2(self.d3, abs(radius) - self.d1)
@@ -209,7 +208,10 @@ class RoverKinematics:
         max_vel = abs(turning_radius) / (abs(turning_radius) + self.d1) * self.max_vel
         if math.isnan(max_vel):
             max_vel = self.max_vel
-        return min(max_vel, commanded_linear_x)
+        limited = min(max_vel, abs(commanded_linear_x))
+        if commanded_linear_x == 0.0:
+            return 0.0
+        return math.copysign(limited, commanded_linear_x)
 
     def angle_to_turning_radius(self, angle: float) -> float:
         """Virtual mid-front wheel angle → turning radius [m]."""

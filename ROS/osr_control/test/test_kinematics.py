@@ -52,6 +52,8 @@ def test_corner_positions_use_closest_and_farthest(kin):
 def test_corner_positions_straight(kin):
     from osr_control.kinematics import CornerCommand
     assert kin.calculate_corner_positions(kin.max_radius) == CornerCommand()
+    assert kin.calculate_corner_positions(-kin.max_radius) == CornerCommand()
+    assert kin.calculate_corner_positions(-(kin.max_radius + 0.1)) == CornerCommand()
 
 
 def test_turning_left_inner_wheels_slower(kin):
@@ -76,3 +78,27 @@ def test_twist_to_radius_infinite_when_no_yaw(kin):
 def test_twist_to_radius_clips_to_min(kin):
     radius = kin.twist_to_turning_radius(0.1, 10.0)
     assert radius == pytest.approx(kin.min_radius)
+
+
+def test_body_speed_for_radius_clamps_reverse(kin):
+    commanded = -10.0
+    limited = kin.body_speed_for_radius(commanded, kin.min_radius)
+    forward_cap = kin.body_speed_for_radius(10.0, kin.min_radius)
+    expected_cap = (
+        abs(kin.min_radius) / (abs(kin.min_radius) + kin.d1) * kin.max_vel)
+    assert limited < 0
+    assert limited == pytest.approx(-expected_cap)
+    assert abs(limited) == pytest.approx(forward_cap)
+    assert abs(limited) < abs(commanded)
+
+
+def test_intuitive_zero_linear_radius_is_clipped(kin):
+    # Large yaw while stopped would yield |r| < min_radius without clipping
+    radius = kin.twist_to_turning_radius(
+        0.0, 100.0, intuitive_mode=True)
+    assert abs(radius) == pytest.approx(kin.min_radius)
+
+    # Tiny yaw while stopped would yield |r| > max_radius without clipping
+    radius = kin.twist_to_turning_radius(
+        0.0, 1e-6, intuitive_mode=True)
+    assert abs(radius) == pytest.approx(kin.max_radius)
